@@ -49,37 +49,45 @@ class Gclient_Core
 		{
 			throw new Gclient_Exception("No configuration file found");
 		}
-    	if ($api_client = Kohana::find_file('vendor', 'google/apiClient'))
+    	if ($api_client = Kohana::find_file('vendor', 'google-api-php-client/src/Google_Client'))
 		{
 			require_once($api_client);
 		}
-		else 
+		else
 		{
 			throw new Gclient_Exception("Google client library not found.");
 		}
         // Do class setup
-        $this->_gclient = new google\apiClient();
-		$this->_gclient->setApplicationName('Qwizzle');
+        $this->_gclient = new Google_Client();
+		$this->_gclient->setApplicationName($this->_config->application_name);
 		$this->_gclient->setClientId($this->_config->client_id);
-		$this->_gclient->setClientSecret($this->_config->client_secret);
-		$this->_gclient->setDeveloperKey($this->_config->developer_key);
-		$this->_gclient->setApprovalPrompt('auto'); 
-		$this->_gclient->setRedirectUri($this->_config->redirect_uri);      
-		$scopes = '';
-		foreach($this->_config['scope'] as $scope)
+
+		$client_type = $this->_config->get('client_type', 'web_application');
+		if ($client_type == 'web_application')
 		{
-			$scopes .= $scope . ' ';
+			$this->_gclient->setClientSecret($this->_config->client_secret);
+			$this->_gclient->setDeveloperKey($this->_config->developer_key);
+			$this->_gclient->setApprovalPrompt('auto'); 
+			$this->_gclient->setRedirectUri($this->_config->redirect_uri);
 		}
-		$this->_gclient->setScopes($scopes);
+		else if ($client_type == 'service_account')
+		{
+			$key = file_get_contents($this->_config->key_file);
+			$this->_gclient->setAssertionCredentials(new Google_AssertionCredentials(
+					$this->_config->developer_email,
+					$this->_config->scope,
+					$key)
+				);
+		}   
 		if ($service)
 		{
 			// attempt to load the api library being called
-			if ( ! $service_file = Kohana::find_file('vendor', 'google/contrib/'.$service))
+			if ( ! $service_file = Kohana::find_file('vendor', 'google-api-php-client/src/contrib/Google_'.$service))
 			{
 				throw new Gclient_Exception("Google api library not found: " . $service);
 			}
 			require_once($service_file);
-			$service = 'google\\'.$service;			
+			$service = 'Google_'.$service;			
  			$this->_service = new $service($this->_gclient);
 		}
     }
@@ -107,6 +115,11 @@ class Gclient_Core
         return Gclient::$_instance;
     }
 
+    public function api()
+    {
+    	return $this->_service;
+    }
+    
 	public function add_service($service)
 	{
 		return $this->_gclient->addService($service);
@@ -116,9 +129,9 @@ class Gclient_Core
 	 * Alias for $this->_gclient->setAccessToken
 	 * 
 	 */
-	public function set_access_token()
+	public function set_access_token($token)
 	{
-		return $this->_gclient->setAcessToken();
+		return $this->_gclient->setAccessToken($token);
 	}
 	
 	/**
